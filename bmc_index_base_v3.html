@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BMC Interactif (FR)</title>
+  <meta name="description" content="Business Model Canvas interactif (FR) — GIFs + notes enregistrés localement, import/export." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/framer-motion/dist/framer-motion.umd.js"></script>
+  <style> html, body { height: 100%; } </style>
+</head>
+<body class="min-h-screen bg-[#f5ebe1]">
+  <div id="root"></div>
+  <script>
+    window.onerror = function(msg, src, line, col, err){
+      const box = document.createElement('div');
+      box.style.cssText = 'padding:12px;margin:16px auto;max-width:880px;border:1px solid #fecaca;background:#fee2e2;color:#991b1b;border-radius:12px;font-family:ui-sans-serif,system-ui';
+      box.innerHTML = '<b>Erreur:</b> ' + (msg||'') + '<br><small>' + (src||'') + ':' + (line||'') + '</small>';
+      document.body.prepend(box);
+    };
+  </script>
+  <script>
+    window.PRELOADED_NOTES = window.PRELOADED_NOTES || {};
+    window.PRELOADED_GIFS  = window.PRELOADED_GIFS  || {};
+  </script>
+
+  <script type="text/babel" data-presets="env,react">
+    const { useState, useMemo, useRef, useEffect } = React;
+    const FM = window["framer-motion"];
+    const AnimatePresence = FM ? FM.AnimatePresence : ({ children }) => children;
+    const motion = FM ? FM.motion : new Proxy({}, { get: () => (props) => React.createElement('div', props, props.children) });
+
+    const IconPlus = (props) => (
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    );
+    const IconArrowLeft = (props) => (
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>
+      </svg>
+    );
+    const IconUpload = (props) => (
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <path d="M17 8l-5-5-5 5"/>
+        <path d="M12 3v12"/>
+      </svg>
+    );
+
+    const CARD_DEFS = [
+      { id: "partners", title: "PARTENAIRES CLÉS", pos: "col-start-1 col-end-3 row-start-1 row-end-3" },
+      { id: "activities", title: "ACTIVITÉS CLÉS", pos: "col-start-3 col-end-5 row-start-1 row-end-2" },
+      { id: "resources", title: "RESSOURCES CLÉS", pos: "col-start-3 col-end-5 row-start-2 row-end-3" },
+      { id: "value", title: "PROPOSITION DE VALEUR", pos: "col-start-5 col-end-7 row-start-1 row-end-3" },
+      { id: "relationships", title: "RELATION CLIENT", pos: "col-start-7 col-end-9 row-start-1 row-end-2" },
+      { id: "channels", title: "CANAUX", pos: "col-start-7 col-end-9 row-start-2 row-end-3" },
+      { id: "segments", title: "SEGMENTS CLIENTS", pos: "col-start-9 col-end-11 row-start-1 row-end-3" },
+      { id: "costs", title: "STRUCTURE DE COÛTS", pos: "col-start-1 col-end-6 row-start-3 row-end-4" },
+      { id: "revenue", title: "REVENUS", pos: "col-start-6 col-end-11 row-start-3 row-end-4" },
+    ];
+
+    function useGifMap() {
+      const [map, setMap] = useState(() => {
+        try {
+          const preload = typeof window !== "undefined" ? (window.PRELOADED_GIFS || {}) : {};
+          const raw = typeof window !== "undefined" ? localStorage.getItem("bmc_gifs") : null;
+          const parsed = raw ? JSON.parse(raw) : {};
+          const merged = { ...parsed, ...preload };
+          if (typeof window !== "undefined") localStorage.setItem("bmc_gifs", JSON.stringify(merged));
+          return merged;
+        } catch { return {}; }
+      });
+      const setOne = (id, url) => {
+        setMap(prev => {
+          const next = { ...prev, [id]: url };
+          try { localStorage.setItem("bmc_gifs", JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
+      const clearOne = (id) => {
+        setMap(prev => {
+          const next = { ...prev }; delete next[id];
+          try { localStorage.setItem("bmc_gifs", JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
+      return { map, setOne, clearOne };
+    }
+
+    function useNotesMap() {
+      const [map, setMap] = useState(() => {
+        try {
+          const preload = typeof window !== "undefined" ? (window.PRELOADED_NOTES || {}) : {};
+          const raw = typeof window !== "undefined" ? localStorage.getItem("bmc_notes") : null;
+          const parsed = raw ? JSON.parse(raw) : {};
+          const merged = { ...parsed, ...preload };
+          if (typeof window !== "undefined") localStorage.setItem("bmc_notes", JSON.stringify(merged));
+          return merged;
+        } catch { return {}; }
+      });
+      const setOne = (id, text) => {
+        setMap(prev => {
+          const next = { ...prev, [id]: text };
+          try { localStorage.setItem("bmc_notes", JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
+      const clearOne = (id) => {
+        setMap(prev => {
+          const next = { ...prev }; delete next[id];
+          try { localStorage.setItem("bmc_notes", JSON.stringify(next)); } catch {}
+          return next;
+        });
+      };
+      return { map, setOne, clearOne };
+    }
+
+    function GifBlock({ id, title, srcCandidate, onPick, className = "", playKey, imgClass = "max-h-40", showPicker = true }) {
+      const [broken, setBroken] = useState(false);
+      const [displaySrc, setDisplaySrc] = useState(null);
+      const imgRef = useRef(null);
+
+      useEffect(() => { setBroken(false); setDisplaySrc(srcCandidate || null); }, [srcCandidate, playKey]);
+
+      useEffect(() => {
+        if (!displaySrc) return;
+        const timer = setTimeout(() => {
+          try {
+            const img = imgRef.current;
+            if (!img) return;
+            const w = img.naturalWidth || img.width || 200;
+            const h = img.naturalHeight || img.height || 200;
+            const canvas = document.createElement("canvas");
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            const snap = canvas.toDataURL("image/png");
+            if (snap && typeof snap === "string") setDisplaySrc(snap);
+          } catch {}
+        }, 1600);
+        return () => clearTimeout(timer);
+      }, [displaySrc, playKey]);
+
+      const hasCandidate = !!displaySrc;
+      const showError = !!srcCandidate && broken;
+
+      return (
+        <div className={`w-full h-full flex flex-col items-center justify-center gap-2 ${className}`}>
+          {hasCandidate && !broken ? (
+            <img ref={imgRef} src={displaySrc} alt={title} className={`${imgClass} object-contain`} onError={() => setBroken(true)} />
+          ) : (
+            showPicker ? <div className="text-gray-500 italic text-sm">GIF à venir</div> : null
+          )}
+          {showPicker ? (
+            <button onClick={onPick} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs hover:opacity-90 active:scale-95">
+              <IconUpload /> Importer un GIF
+            </button>
+          ) : null}
+          {showPicker && showError && <div className="text-[11px] text-red-600">Le chemin n'est pas accessible ici. Importe le GIF localement.</div>}
+        </div>
+      );
+    }
+
+    const CardShell = ({ title, children, onOpen }) => (
+      <div className="relative group h-full w-full rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-10 bg-[#E9F6EF] flex items-center justify-between px-4">
+          <div className="font-semibold text-gray-800 tracking-wide uppercase text-sm">{title}</div>
+          <div className="flex items-center gap-0">
+            <button onClick={onOpen} className="p-1 rounded-md hover:scale-110 active:scale-95 transition" aria-label={`Ouvrir ${title}`}>
+              <IconPlus className="h-5 w-5 text-gray-900" />
+            </button>
+          </div>
+        </div>
+        <div className="pt-12 h-full">{children}</div>
+      </div>
+    );
+
+    function App() {
+      const { map: gifMap, setOne: setGif } = useGifMap();
+      const { map: notesMap, setOne: setNote } = useNotesMap();
+      const [opened, setOpened] = useState(null);
+      const [viewKey, setViewKey] = useState(0);
+      const fileInputs = useRef({});
+      const importBackupInput = useRef(null);
+
+      useEffect(() => { setViewKey((k) => k + 1); }, [opened]);
+
+      const pickFile = (id) => { if (fileInputs.current[id]) fileInputs.current[id].click(); };
+      const onFileChange = (id, e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => { const url = typeof reader.result === "string" ? reader.result : null; if (url) setGif(id, url); };
+        reader.readAsDataURL(file);
+      };
+
+      const cards = useMemo(() => CARD_DEFS.map((c) => ({
+        ...c,
+        src: gifMap[c.id] || null,
+      })), [gifMap]);
+
+      const exportBackup = () => {
+        try {
+          const notes = JSON.parse(localStorage.getItem('bmc_notes') || '{}');
+          const gifs = JSON.parse(localStorage.getItem('bmc_gifs') || '{}');
+          const payload = { version: 1, exportedAt: new Date().toISOString(), notes, gifs };
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'bmc_sauvegarde.json';
+          document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+        } catch (e) { alert('Export impossible: ' + e.message); }
+      };
+
+      const triggerImportBackup = () => { importBackupInput.current?.click(); };
+      const onImportBackup = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const json = JSON.parse(String(reader.result || '{}'));
+            const incomingNotes = json.notes || {}; const incomingGifs = json.gifs || {};
+            const prevNotes = JSON.parse(localStorage.getItem('bmc_notes') || '{}');
+            const prevGifs  = JSON.parse(localStorage.getItem('bmc_gifs')  || '{}');
+            const notes = { ...prevNotes, ...incomingNotes };
+            const gifs  = { ...prevGifs,  ...incomingGifs  };
+            localStorage.setItem('bmc_notes', JSON.stringify(notes));
+            localStorage.setItem('bmc_gifs',  JSON.stringify(gifs));
+            Object.entries(notes).forEach(([k, v]) => setNote(k, typeof v === 'string' ? v : ''));
+            Object.entries(gifs).forEach(([k, v]) => setGif(k, typeof v === 'string' ? v : null));
+            alert('Import terminé (fusion).');
+          } catch (err) { alert('Fichier invalide: ' + err.message); }
+          e.target.value = '';
+        };
+        reader.readAsText(file);
+      };
+
+      return (
+        <div className="min-h-screen w-full bg-[#f5ebe1] p-6">
+          <div className="max-w-6xl mx-auto">
+            <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 mb-4">
+              BUSINESS MODEL <span className="font-light">CANVAS</span>
+            </h1>
+
+            {CARD_DEFS.map((c) => (
+              <input
+                key={c.id}
+                type="file"
+                accept="image/gif,image/apng,image/webp,image/png,image/jpeg"
+                className="hidden"
+                ref={(el) => (fileInputs.current[c.id] = el)}
+                onChange={(e) => onFileChange(c.id, e)}
+              />
+            ))}
+
+            <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(10, minmax(0, 1fr))", gridTemplateRows: "180px 180px 220px" }}>
+              {cards.map((c) => (
+                <div key={c.id} className={c.pos}>
+                  <div className="relative group h-full w-full rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                    <div className="absolute inset-x-0 top-0 h-10 bg-[#E9F6EF] flex items-center justify-between px-4">
+                      <div className="font-semibold text-gray-800 tracking-wide uppercase text-sm">{c.title}</div>
+                      <div className="flex items-center gap-0">
+                        <button onClick={() => setOpened(c.id)} className="p-1 rounded-md hover:scale-110 active:scale-95 transition" aria-label={`Ouvrir ${c.title}`}>
+                          <IconPlus className="h-5 w-5 text-gray-900" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="pt-12 h-full">
+                      <GifBlock
+                        id={c.id}
+                        title={c.title}
+                        srcCandidate={c.src}
+                        onPick={() => fileInputs.current[c.id]?.click()}
+                        playKey={viewKey}
+                        imgClass={["resources","relationships","costs","revenue"].includes(c.id) ? "max-h-28" : "max-h-40"}
+                        showPicker={false}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {opened && (
+              <motion.div
+                className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                <motion.div
+                  className="relative w-[96vw] max-w-5xl bg-white rounded-3xl shadow-2xl overflow-hidden"
+                  initial={{ y: 40, scale: 0.98, opacity: 0 }}
+                  animate={{ y: 0, scale: 1, opacity: 1 }}
+                  exit={{ y: 20, scale: 0.98, opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 140, damping: 18 }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-16 bg-[#E9F6EF] flex items-center px-4 justify-between">
+                    <div className="flex items-center gap-2">
+                      <GifBlock
+                        id={opened}
+                        title={cards.find((x) => x.id === opened)?.title || ""}
+                        srcCandidate={cards.find((x) => x.id === opened)?.src || null}
+                        onPick={() => {}}
+                        className="h-6"
+                        playKey={viewKey}
+                        imgClass="h-6"
+                        showPicker={false}
+                      />
+                      <div className="font-semibold text-gray-900 uppercase tracking-wide text-sm">
+                        {cards.find((x) => x.id === opened)?.title}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => fileInputs.current[opened]?.click()} className="p-1 rounded-md hover:bg-black/5 active:scale-95" aria-label="Importer un GIF">
+                        <IconUpload />
+                      </button>
+                      <button onClick={() => setOpened(null)} className="p-2 rounded-md hover:bg-black/5 active:scale-95 transition" aria-label="Revenir à la vue des cartes">
+                        <IconArrowLeft />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="pt-20 pb-8 px-6">
+                    <textarea
+                      value={notesMap[opened] ?? ""}
+                      onChange={(e) => setNote(opened, e.target.value)}
+                      placeholder="Écris ici tout ce que tu veux pour cette carte…"
+                      className="w-full min-h-[360px] rounded-xl border border-gray-200 p-4 outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300 bg-white/80"
+                    />
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <input type="file" ref={importBackupInput} onChange={onImportBackup} accept="application/json" className="hidden" />
+          <div className="fixed bottom-4 right-4 flex gap-2 z-50">
+            <button onClick={exportBackup} className="px-3 py-2 rounded-lg bg-gray-900 text-white text-xs hover:opacity-90 active:scale-95 shadow">Exporter sauvegarde</button>
+            <button onClick={triggerImportBackup} className="px-3 py-2 rounded-lg bg-white border border-gray-300 text-xs hover:bg-gray-50 active:scale-95 shadow">Importer</button>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
